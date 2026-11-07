@@ -47,12 +47,19 @@ function parseDamageValue(raw: string | number | null | undefined): number {
   const text = (raw ?? "").trim();
   if (!text) { return 0; }
 
-  const suffixMatch = text.match(/([KMB])\s*$/i);
+  // Normalize non-ASCII digits/separators some locales use in toLocaleString()
+  // (Arabic-Indic and Extended Arabic-Indic digits, Arabic thousands/decimal marks).
+  const normalizedText = text
+    .replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (digit) => String(digit.charCodeAt(0) & 0x0f))
+    .replace(/[\u066C\u060C]/g, ",")
+    .replace(/\u066B/g, ".");
+
+  const suffixMatch = normalizedText.match(/([KMB])\s*$/i);
   const suffix = suffixMatch?.[1]?.toUpperCase() ?? "";
   const multipliers: Record<string, number> = { K: 1_000, M: 1_000_000, B: 1_000_000_000 };
   const multiplier = suffix ? multipliers[suffix] : 1;
 
-  const numericPart = (suffixMatch ? text.slice(0, suffixMatch.index) : text).replace(/[^\d.,]/g, "");
+  const numericPart = (suffixMatch ? normalizedText.slice(0, suffixMatch.index) : normalizedText).replace(/[^\d.,]/g, "");
   if (!numericPart) { return 0; }
 
   const hasDot = numericPart.includes(".");

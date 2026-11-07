@@ -203,6 +203,8 @@ describe("modifier.ts utilities", () => {
       expect(parseDamageValue("1,5B")).toBe(1500000000);
       expect(parseDamageValue("12K")).toBe(12000);
       expect(parseDamageValue("1 234,5")).toBe(1234.5);
+      expect(parseDamageValue("1.234,5")).toBe(1234.5);
+      expect(parseDamageValue("٢٣٬٠٢٠٬٨٩١٬٦٤٣")).toBe(23020891643);
       expect(parseDamageValue("")).toBe(0);
       expect(parseDamageValue("—")).toBe(0);
     });
