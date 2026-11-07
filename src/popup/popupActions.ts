@@ -120,20 +120,7 @@ export function setupExportButton(state: PopupState): void {
     });
   };
 
-  const toNumber = (val: unknown): number => {
-    if (typeof val === "number") {return val;}
-    if (val === null || val === undefined) {return 0;}
-    const match = String(val).match(/([\d.]+)([KMB]?)/i);
-    if (!match) {return 0;}
-    const [, numStr, suffix] = match;
-    let num = parseFloat(numStr);
-    switch (suffix.toUpperCase()) {
-      case "K": num *= 1_000; break;
-      case "M": num *= 1_000_000; break;
-      case "B": num *= 1_000_000_000; break;
-    }
-    return num;
-  };
+  const toNumber = (val: unknown): number => PopupUtils.parseNumber(val as string | number | undefined);
 
   const exportCsv = (data: PlayerRaidResult[]): void => {
     const header = [

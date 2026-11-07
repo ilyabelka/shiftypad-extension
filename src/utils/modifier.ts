@@ -29,6 +29,56 @@ function isUnionRaidPage(): boolean {
   return /union-raid/i.test(location.pathname);
 }
 
+/**
+ * Parse a damage figure that may be formatted for any browser locale
+ * (e.g. "23,020,891,643", "23 020 891 643", "23.020.891.643") and may carry a
+ * compact K/M/B suffix (e.g. "111.061B").
+ *
+ * The site renders modal damage with `Number.prototype.toLocaleString()`, so
+ * the thousands separator depends on the browser locale (ru-RU uses a
+ * non-breaking space). `Number(text)` alone returns NaN for those values and
+ * the whole player total collapses to 0B.
+ *
+ * @param {string | number | null | undefined} raw - Raw damage text taken from the page.
+ * @returns {number} The numeric damage value, or 0 when the text has no digits.
+ */
+function parseDamageValue(raw: string | number | null | undefined): number {
+  if (typeof raw === "number") { return Number.isFinite(raw) ? raw : 0; }
+  const text = (raw ?? "").trim();
+  if (!text) { return 0; }
+
+  const suffixMatch = text.match(/([KMB])\s*$/i);
+  const suffix = suffixMatch?.[1]?.toUpperCase() ?? "";
+  const multipliers: Record<string, number> = { K: 1_000, M: 1_000_000, B: 1_000_000_000 };
+  const multiplier = suffix ? multipliers[suffix] : 1;
+
+  const numericPart = (suffixMatch ? text.slice(0, suffixMatch.index) : text).replace(/[^\d.,]/g, "");
+  if (!numericPart) { return 0; }
+
+  const hasDot = numericPart.includes(".");
+  const hasComma = numericPart.includes(",");
+  let normalized = numericPart;
+
+  if (hasDot && hasComma) {
+    // Both separators present: the right-most one is the decimal separator.
+    const decimalSeparator = numericPart.lastIndexOf(".") > numericPart.lastIndexOf(",") ? "." : ",";
+    const groupSeparator = decimalSeparator === "." ? "," : ".";
+    normalized = numericPart.split(groupSeparator).join("").replace(decimalSeparator, ".");
+  } else if (hasDot || hasComma) {
+    const separator = hasDot ? "." : ",";
+    const parts = numericPart.split(separator);
+    // Several separators always mean thousands grouping. A single separator
+    // followed by exactly three digits is grouping too ("23,020"), unless the
+    // value is abbreviated with K/M/B where ".061" is a decimal fraction.
+    const usesGrouping = parts.length > 2 ||
+      (parts.length === 2 && !suffixMatch && parts[1].length === 3);
+    normalized = usesGrouping ? parts.join("") : parts.join(".");
+  }
+
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value * multiplier : 0;
+}
+
 
 /**
  * Wait for a DOM element matching the given selector to appear within a timeout.
@@ -406,7 +456,10 @@ async function scrapeUnionRaidAllModals(
       console.log("LV FOUND:", debugLvText, "=>", synchro);
 
       const total_attempt = rows.length;
-      const total_damage = rows.reduce((sum, r) => sum + (r.damage || 0), 0);
+      const total_damage = rows.reduce(
+        (sum, r) => sum + (Number.isFinite(r.damage) ? r.damage : 0),
+        0
+      );
 
       function formatToB(num: number): string {
         return (num / 1_000_000_000).toFixed(3).replace(/\.?0+$/, "") + "B";
@@ -520,12 +573,18 @@ function extractRowsFromModal(modal: HTMLElement): RaidDamageRow[] {
 
       const level = parseInt(levelText.replace(/\D+/g, ""), 10) || 0;
 
-      const damageText =
-        block.querySelectorAll<HTMLElement>(
-          "div.font-bold"
-        )[1]?.textContent ?? "";
+      // Damage lives in the right-hand panel: the bold value right after the
+      // localized "damage" label. Prefer the structural selector because the
+      // generic `div.font-bold` index shifts when the layout changes.
+      const damageEl =
+        block.querySelector<HTMLElement>(
+          "div.flex.flex-col.items-end.mt-\\[20px\\] > div.font-bold"
+        ) ??
+        block.querySelectorAll<HTMLElement>("div.font-bold")[1] ??
+        null;
 
-      const damage = Number(damageText.replace(/,/g, ""));
+      const damageText = damageEl?.textContent ?? "";
+      const damage = parseDamageValue(damageText);
 
       const heroes: import("../types").NikkeHero[] = [];
       const heroContainers = block.querySelectorAll(
@@ -790,6 +849,7 @@ export {
   seasonTextToKey,
   getBossWeakness,
   isUnionRaidPage,
+  parseDamageValue,
   openMemberDropdown,
   scrapeTable,
   scrapeUnionName,

@@ -1,5 +1,5 @@
 import { ApexChartOptions, BossOptionsParams, SummaryOptionsParams } from "../types";
-import { getBossWeakness } from "../utils/modifier";
+import { getBossWeakness, parseDamageValue } from "../utils/modifier";
 
 /**
  * Returns title color based on current theme.
@@ -80,18 +80,7 @@ export function getCacheKeyFromUrl(url: string): string {
  * @returns {number} The parsed number.
  */
 export function parseNumber(val: string | number | undefined): number {
-  if (typeof val === "number") {return val;}
-  if (!val) {return 0;}
-  const match = val.match(/([\d.]+)([KMB]?)/i);
-  if (!match) {return 0;}
-  const [, numStr, suffix] = match;
-  let num = parseFloat(numStr);
-  switch (suffix.toUpperCase()) {
-    case "K": num *= 1_000; break;
-    case "M": num *= 1_000_000; break;
-    case "B": num *= 1_000_000_000; break;
-  }
-  return num;
+  return parseDamageValue(val);
 }
 
 /**

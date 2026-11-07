@@ -14,6 +14,14 @@ describe("Popup Utilities", () => {
     expect(PopupUtils.parseNumber("invalid")).toBe(0);
   });
 
+  test("parseNumber should handle locale-formatted damage", () => {
+    expect(PopupUtils.parseNumber("23,020,891,643")).toBe(23020891643);
+    expect(PopupUtils.parseNumber("23\u00A0020\u00A0891\u00A0643")).toBe(23020891643);
+    expect(PopupUtils.parseNumber("23.020.891.643")).toBe(23020891643);
+    expect(PopupUtils.parseNumber("111.061B")).toBe(111061000000);
+    expect(PopupUtils.parseNumber("0B")).toBe(0);
+  });
+
   test("formatNumber should convert large numbers to K, M, B", () => {
     expect(PopupUtils.formatNumber(1500)).toBe("1.5K");
     expect(PopupUtils.formatNumber(1500000)).toBe("1.5M");

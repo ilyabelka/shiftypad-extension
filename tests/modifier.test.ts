@@ -164,6 +164,49 @@ describe("modifier.ts utilities", () => {
       expect(getCurrentSeasonKey()).toContain("SEASON_S21");
     });
 
+    test("extractRowsFromModal should parse locale-formatted damage (ru-RU NBSP)", () => {
+      const modal = document.createElement("div");
+      modal.innerHTML = `
+        <div class="w-full bg-[#f4f4f4] px-[12px] py-[12px] flex flex-col mb-[8px] last:mb-0 h-[150px]">
+          <div class="flex">
+            <div class="flex flex-1">
+              <div class="font-[DINNextLTProBold] text-[color:var(--text-1)] h-[20px] leading-[20px]">Mace H.S.T.A.</div>
+            </div>
+            <div class="flex flex-col items-end">
+              <div class="px-[4px] rounded-sm text-[color:var(--color-white)] h-[18px] text-[12px] bg-[#fc6a37]">HARD</div>
+              <div class="mt-[4px] text-[color:var(--text-1)] font-bold text-[12px] leading-[12px]"> Level 2</div>
+            </div>
+          </div>
+          <div class="flex mt-[8px]">
+            <div class="av flex flex-1 flex-row"></div>
+            <div class="flex flex-col items-end mt-[20px] font-[DINNextLTProBold]">
+              <div class="text-[var(--text-3)] text-[12px] leading-[12px]">Урон</div>
+              <div class="mt-[7px] font-bold text-[var(--text-3)] text-[16px] leading-[12px]">23\u00A0020\u00A0891\u00A0643</div>
+            </div>
+          </div>
+        </div>
+      `;
+      const { extractRowsFromModal } = require("../src/utils/modifier");
+      const rows = extractRowsFromModal(modal);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].damage).toBe(23020891643);
+    });
+
+    test("parseDamageValue should understand every locale separator", () => {
+      const { parseDamageValue } = require("../src/utils/modifier");
+      expect(parseDamageValue("23,020,891,643")).toBe(23020891643);
+      expect(parseDamageValue("23\u00A0020\u00A0891\u00A0643")).toBe(23020891643);
+      expect(parseDamageValue("23 020 891 643")).toBe(23020891643);
+      expect(parseDamageValue("23.020.891.643")).toBe(23020891643);
+      expect(parseDamageValue("23'020'891'643")).toBe(23020891643);
+      expect(parseDamageValue("111.061B")).toBe(111061000000);
+      expect(parseDamageValue("1,5B")).toBe(1500000000);
+      expect(parseDamageValue("12K")).toBe(12000);
+      expect(parseDamageValue("1 234,5")).toBe(1234.5);
+      expect(parseDamageValue("")).toBe(0);
+      expect(parseDamageValue("—")).toBe(0);
+    });
+
     test("extractRowsFromModal should parse raid blocks", () => {
       const modal = document.createElement("div");
       modal.innerHTML = `
@@ -184,6 +227,53 @@ describe("modifier.ts utilities", () => {
       expect(rows[0].boss).toBe("H.S.T.A.");
       expect(rows[0].damage).toBe(1234567);
       expect(rows[0].level).toBe(10);
+    });
+
+    test("scrapeUnionRaidAllModals should report localized damage instead of 0B", async () => {
+      const btn = document.createElement("span");
+      btn.setAttribute("data-cname", "svg-icon");
+      const table = document.createElement("table");
+      const tbody = document.createElement("tbody");
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.appendChild(btn);
+      tr.appendChild(document.createElement("td"));
+      tr.appendChild(document.createElement("td"));
+      tr.appendChild(document.createElement("td"));
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      table.appendChild(tbody);
+      document.body.appendChild(table);
+
+      btn.onclick = () => {
+        const modal = document.createElement("div");
+        modal.className = "absolute bottom-0 w-full";
+        modal.innerHTML = `
+          <div class="font-bold">Localized Player</div>
+          <div class="av"><div class="relative"><div>LV.700</div></div></div>
+          <div class="w-full bg-[#f4f4f4] h-[150px]">
+             <div class="font-[DINNextLTProBold]">Boss</div>
+             <div class="bg-[#fc6a37]">HARD</div>
+             <div class="flex flex-col items-end"><div></div><div>Level 2</div></div>
+             <div class="flex flex-col items-end mt-[20px]">
+               <div>Урон</div>
+               <div class="font-bold">23\u00A0020\u00A0891\u00A0643</div>
+             </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+      };
+
+      const { scrapeUnionRaidAllModals, getCacheKey } = require("../src/utils/modifier");
+      await scrapeUnionRaidAllModals(false, false);
+
+      const stored = JSON.parse(
+        globalThis.localStorage.getItem(
+          `ALL_UNION_RAID_DAMAGE_DATA_${getCacheKey()}__SEASON_CURRENT`
+        ) ?? "[]"
+      );
+      expect(stored[0].total_damage).toBe(23020891643);
+      expect(stored[0].total_damage_text).toBe("23.021B");
     });
 
     test("scrapeUnionRaidAllModals should iterate buttons", async () => {
